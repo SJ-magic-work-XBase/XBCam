@@ -69,6 +69,12 @@ void GUI_GLOBAL::setup(string GuiName, string FileName, float x, float y)
 		Group_ImageProcess.add(ErodeSize.setup("ErodeSize", 1, 0, 15));
 	gui.add(&Group_ImageProcess);
 	
+	Group_DetectColor.setup("DetectColor");
+		Group_DetectColor.add(thresh_Diff_Hue.setup("thresh_Diff_Hue", 7, 0, 180));
+		Group_DetectColor.add(k_Saturation.setup("k_Saturation", 0.63, 0, 1.0));
+		Group_DetectColor.add(k_Brightness.setup("k_Brightness", 0.75, 0, 1.0));
+	gui.add(&Group_DetectColor);
+	
 	/********************
 	********************/
 	gui.minimizeAll();

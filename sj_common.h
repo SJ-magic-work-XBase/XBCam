@@ -75,6 +75,11 @@ public:
 		ofxFloatSlider thresh_Diff_to_Bin;
 		ofxFloatSlider ErodeSize;
 		
+	ofxGuiGroup Group_DetectColor;
+		ofxFloatSlider thresh_Diff_Hue;
+		ofxFloatSlider k_Saturation;
+		ofxFloatSlider k_Brightness;
+		
 	/****************************************
 	****************************************/
 	ofxPanel gui;

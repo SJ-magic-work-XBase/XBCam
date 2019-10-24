@@ -15,6 +15,23 @@
 ■Kill camera process
 	> sudo killall VDCAssistant
 ************************************************************/
+
+
+/************************************************************
+■精度検証 結果
+-	Rと肌の色が近いので注意が必要
+	-	Gを使った方がいいかも
+	-	Camの見える空間を暗くすれば、肌のR成分が減り、精度upするかもしれない
+	
+-	そもそもRのLedがRとして認識し辛い
+	-	thresh_B < thresh_R としてRは認識し易くする必要あり
+	-	これは、肌の色をより検出し易い方向なので、その点は注意してthreshを決める必要あり
+	-	本番では、Rの検出が上手く行かなくなったら、Bのみで運用で一時的な回避はできる
+	
+-	Bの検出はGood
+-	Cam位置は、割と近めでないと精度に影響が大きいだろう
+-	Ledの数は、多めでないと上手く検出できなそう。Sheet(10個) 1枚そのまま使うくらい
+************************************************************/
 #pragma once
 
 /************************************************************
@@ -85,8 +102,14 @@ private:
 	int RANGE_NUM_PIX_TO;
 	
 	int t_from_ms = 0;
-	const int THRESH_TIME;
+	const int THRESH_TIME_OFFtoON;
+	const int THRESH_TIME_ONtoOFF;
 	int NumPix_Detected = 0;
+	
+	bool IsInRange(){
+		if( (RANGE_NUM_PIX_FROM < NumPix_Detected) && (NumPix_Detected < RANGE_NUM_PIX_TO) )	return true;
+		else																					return false;
+	}
 	
 public:
 	enum STATE{
@@ -96,10 +119,11 @@ public:
 	
 	STATE State = STATE__NOT_DETECTED;
 	
-	STATE_ONOFF(int _RANGE_NUM_PIX_FROM, int _RANGE_NUM_PIX_TO, int _THRESH_TIME)
+	STATE_ONOFF(int _RANGE_NUM_PIX_FROM, int _RANGE_NUM_PIX_TO, int _THRESH_TIME_OFFtoON, int _THRESH_TIME_ONtoOFF)
 	: RANGE_NUM_PIX_FROM(_RANGE_NUM_PIX_FROM)
 	, RANGE_NUM_PIX_TO(_RANGE_NUM_PIX_TO)
-	, THRESH_TIME(_THRESH_TIME)
+	, THRESH_TIME_OFFtoON(_THRESH_TIME_OFFtoON)
+	, THRESH_TIME_ONtoOFF(_THRESH_TIME_ONtoOFF)
 	{
 	}
 	
@@ -112,17 +136,20 @@ public:
 		NumPix_Detected = _NumPix_Detected;
 		switch(State){
 			case STATE__NOT_DETECTED:
-				if( (RANGE_NUM_PIX_FROM < NumPix_Detected) && (NumPix_Detected < RANGE_NUM_PIX_TO) ){
-					State = STATE__DETECTED;
+				if(IsInRange()){
+					if(THRESH_TIME_OFFtoON < now - t_from_ms){
+						State = STATE__DETECTED;
+					}
+				}else{
 					t_from_ms = now;
 				}
 				break;
 				
 			case STATE__DETECTED:
-				if( (RANGE_NUM_PIX_FROM < NumPix_Detected) && (NumPix_Detected < RANGE_NUM_PIX_TO) ){
+				if(IsInRange()){
 					t_from_ms = now;
 				}else{
-					if(THRESH_TIME < now - t_from_ms){
+					if(THRESH_TIME_ONtoOFF < now - t_from_ms){
 						State = STATE__NOT_DETECTED;
 					}
 				}
@@ -135,7 +162,54 @@ public:
 	int get__pixRange_from()	{ return RANGE_NUM_PIX_FROM; }
 	int get__pixRange_to()		{ return RANGE_NUM_PIX_TO; }
 	
-	void Reset() { State = STATE__NOT_DETECTED; NumPix_Detected = 0; }
+	void Reset(int now) { State = STATE__NOT_DETECTED; NumPix_Detected = 0; t_from_ms = now;  }
+};
+
+/**************************************************
+**************************************************/
+struct CALIB_IMG{
+	ofImage img;
+	
+	int ret_MinSquareDistance__to_Evil;
+	ofColor col_NearestTo_Evil;
+	
+	int ret_MinSquareDistance__to_Calm;
+	ofColor col_NearestTo_Calm;
+};
+
+/**************************************************
+description
+	thresh, Diff, Margin は、都度算出する(kで値が変わる)。
+**************************************************/
+class CALIB_RESULT{
+private:
+	ofColor col;
+	
+	float Hue;
+	float Saturation;
+	float Brightness;
+	
+public:
+	void set(const ofColor& _col){
+		col = _col;
+		
+		Hue = col.getHueAngle();
+		Saturation = col.getSaturation();
+		Brightness = col.getBrightness();
+	}
+	
+	ofColor get_Color() const	{ return col; }
+	
+	float get_deltaHue(float _H) const
+	{
+		float delta = abs(_H - Hue);
+		if(180 <= delta) delta = 360 - delta;
+		return delta;
+	}
+	
+	float get_Hue() const	{ return Hue; }
+	float get_Saturation() const	{ return Saturation; }
+	float get_Brightness() const	{ return Brightness; }
 };
 
 /**************************************************
@@ -146,14 +220,16 @@ private:
 	****************************************/
 	enum{ FONT_S, FONT_M, FONT_L, FONT_LL, NUM_FONTSIZE, };
 	enum{ NUM_DRAW_POS = 6, };
+	enum{ NUM_CALIB_IMGS = 3, };
 	
 	enum STATE_OVERLOOK{
 		STATEOVERLOOK__CALIB,
 		STATEOVERLOOK__RUN,
 	};
 	enum STATE_CALIB{
-		STATECALIB__WAITSHOOT_BACK_IMG,
-		STATECALIB__WAITSHOOT_LED_IMG,
+		STATECALIB__WAITSHOOT_IMG_0,
+		STATECALIB__WAITSHOOT_IMG_1,
+		STATECALIB__WAITSHOOT_IMG_2,
 		STATECALIB__FIN,
 	};
 	
@@ -173,21 +249,27 @@ private:
 	
 	bool b_flipCamera;
 	
+	/* for Auto Search of  Cam device */
 	bool b_CamSearchFailed = false;
 	float t_CamSearchFailed;
 	
 	/********************
 	********************/
 	bool b_HaltRGBVal_inCalib = false;
-	const ofColor col_Target;
 	ofVec2f MouseOffset;
 	
 	/********************
 	********************/
-	int thresh_ifTargetColorExist;
-	int ret_MinSquareDistance__Back;
-	int ret_MinSquareDistance__Led;
+	const ofColor col_Evil;
+	const ofColor col_Calm;
 	
+	CALIB_IMG CalibImage[NUM_CALIB_IMGS];
+	
+	CALIB_RESULT CalibResult_Evil;
+	CALIB_RESULT CalibResult_Calm;
+	
+	/********************
+	********************/
 	KEYINPUT_COMMAND KeyInputCommand;
 	
 	/********************
@@ -199,16 +281,13 @@ private:
     ofImage img_AbsDiff_BinGray;
     ofImage img_BinGray_Cleaned;
 	
-    ofImage img_Calib_Back;
-    ofImage img_Calib_Led;
-	
-	
 	/********************
 	********************/
 	STATE_OVERLOOK State_Overlook = STATEOVERLOOK__CALIB;
-	STATE_CALIB State_Calib = STATECALIB__WAITSHOOT_BACK_IMG;
+	STATE_CALIB State_Calib = STATECALIB__WAITSHOOT_IMG_0;
 	
-	STATE_ONOFF State_Led;
+	STATE_ONOFF State_Led_Evil;
+	STATE_ONOFF State_Led_Calm;
 	STATE_ONOFF State_Motion;
 	
 	/********************
@@ -233,15 +312,20 @@ private:
 	void StateChart_Calib();
 	int ForceOdd(int val);
 	void drawMessage_CamSearchFailed();
-	void draw_RGB_ofThePoint();
-	int cal_SquareDistance_to_TargetCol(ofColor& col);
-	void Search_MinSquareDistance_to_TargetCol(ofImage& img, int& ret_Min_SquareDistance, ofPoint& ret_pos);
-	bool CalThresh__ifTargetColorExist();
+	void draw_RGB_ofThePoint_Calib();
+	void draw_RGB_ofThePoint_Run();	
+	int cal_SquareDistance(const ofColor& col_0, const ofColor& col_1);
+	void Search_MinSquareDistance_to_TargetCol(ofImage& img,  const ofColor& TargetCol, int& ret_MinSquareDistance, ofPoint& ret_pos, ofColor& ret_Col_Nearest);
 	void draw_Calib();
 	void draw_Run();
-	void Judge_if_LedExist(bool b_Update_pix_Range = false);
+	void Judge_if_LedExist(const CALIB_RESULT& CalibResult, STATE_ONOFF& State_Led, const ofColor& col_Target);
 	void Judge_if_MotionExist();
 	void SendOSC_to_Effect();
+	void CalAndMark_MinDistance(CALIB_IMG& _CalibImage);
+	static int int_sort( const void * a , const void * b );
+	void draw_HaltMark();
+	void save_NearestColor();
+	bool isThisColor_Judged_as_Led(const CALIB_RESULT& CalibResult, const ofColor& col);
 
 public:
 	/****************************************
