@@ -139,6 +139,7 @@ public:
 				if(IsInRange()){
 					if(THRESH_TIME_OFFtoON < now - t_from_ms){
 						State = STATE__DETECTED;
+						t_from_ms = now;
 					}
 				}else{
 					t_from_ms = now;
@@ -151,6 +152,7 @@ public:
 				}else{
 					if(THRESH_TIME_ONtoOFF < now - t_from_ms){
 						State = STATE__NOT_DETECTED;
+						t_from_ms = now;
 					}
 				}
 				break;			
@@ -220,7 +222,7 @@ private:
 	****************************************/
 	enum{ FONT_S, FONT_M, FONT_L, FONT_LL, NUM_FONTSIZE, };
 	enum{ NUM_DRAW_POS = 6, };
-	enum{ NUM_CALIB_IMGS = 3, };
+	enum{ NUM_CALIB_IMGS = 2, };
 	
 	enum STATE_OVERLOOK{
 		STATEOVERLOOK__CALIB,
@@ -229,7 +231,6 @@ private:
 	enum STATE_CALIB{
 		STATECALIB__WAITSHOOT_IMG_0,
 		STATECALIB__WAITSHOOT_IMG_1,
-		STATECALIB__WAITSHOOT_IMG_2,
 		STATECALIB__FIN,
 	};
 	
@@ -275,6 +276,10 @@ private:
 	/********************
 	********************/
     ofImage img_Frame;
+    ofImage img_LedDetectedArea_Last;
+    ofImage img_LedDetectedArea_Current;
+    ofImage img_LedDetectedArea_Current_Calm;
+    ofImage img_LedDetectedArea_Current_Evil;
     ofImage img_LedDetectedArea;
     ofImage img_Frame_Gray;
     ofImage img_LastFrame_Gray;
@@ -287,7 +292,9 @@ private:
 	STATE_CALIB State_Calib = STATECALIB__WAITSHOOT_IMG_0;
 	
 	STATE_ONOFF State_Led_Evil;
+	STATE_ONOFF State_Led_Evil_Raw;
 	STATE_ONOFF State_Led_Calm;
+	STATE_ONOFF State_Led_Calm_Raw;
 	STATE_ONOFF State_Motion;
 	
 	/********************
@@ -318,7 +325,8 @@ private:
 	void Search_MinSquareDistance_to_TargetCol(ofImage& img,  const ofColor& TargetCol, int& ret_MinSquareDistance, ofPoint& ret_pos, ofColor& ret_Col_Nearest);
 	void draw_Calib();
 	void draw_Run();
-	void Judge_if_LedExist(const CALIB_RESULT& CalibResult, STATE_ONOFF& State_Led, const ofColor& col_Target);
+	void update__img_LedDetected_Current(ofImage& _img_LedDetectedArea_Current, const CALIB_RESULT& CalibResult, const ofColor& col_Target);
+	void Judge_if_LedExist();
 	void Judge_if_MotionExist();
 	void SendOSC_to_Effect();
 	void CalAndMark_MinDistance(CALIB_IMG& _CalibImage);
@@ -326,6 +334,7 @@ private:
 	void draw_HaltMark();
 	void save_NearestColor();
 	bool isThisColor_Judged_as_Led(const CALIB_RESULT& CalibResult, const ofColor& col);
+	bool isFile_Exist(char* FileName);
 
 public:
 	/****************************************

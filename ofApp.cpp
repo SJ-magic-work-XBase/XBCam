@@ -20,9 +20,12 @@ ofApp::ofApp(int _Cam_id)
 , MouseOffset(ofVec2f(0, 0))
 , b_flipCamera(false)
 , col_Evil(ofColor(255, 0, 0))
+// , col_Evil(ofColor(0, 255, 0))
 , col_Calm(ofColor(0, 0, 255))
-, State_Led_Evil(5, IMG_S_WIDTH * IMG_S_HEIGHT / 16, 200, 300)
-, State_Led_Calm(5, IMG_S_WIDTH * IMG_S_HEIGHT / 16, 200, 300)
+, State_Led_Evil(5, IMG_S_WIDTH * IMG_S_HEIGHT / 2, 200, 300)
+, State_Led_Evil_Raw(5, IMG_S_WIDTH * IMG_S_HEIGHT / 2, 200, 300)
+, State_Led_Calm(5, IMG_S_WIDTH * IMG_S_HEIGHT / 2, 200, 300)
+, State_Led_Calm_Raw(5, IMG_S_WIDTH * IMG_S_HEIGHT / 2, 200, 300)
 , State_Motion(0, IMG_S_WIDTH * IMG_S_HEIGHT, 0, 100)
 , Osc_Effect("127.0.0.1", 12345, 12346)
 {
@@ -77,13 +80,18 @@ void ofApp::setup(){
 	/********************
 	********************/
 	setup_Gui();
+	if(isFile_Exist("../../../data/gui.xml"))	Gui_Global->gui.loadFromFile("gui.xml");
 	
 	setup_Camera();
 	if(!b_CamSearchFailed){
 		/********************
 		********************/
 		img_Frame.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_COLOR);
+		img_LedDetectedArea_Last.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_COLOR);
+		img_LedDetectedArea_Current.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_COLOR);
 		img_LedDetectedArea.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_COLOR);
+		img_LedDetectedArea_Current_Calm.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_GRAYSCALE);
+		img_LedDetectedArea_Current_Evil.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_GRAYSCALE);
 		img_Frame_Gray.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_GRAYSCALE);
 		img_LastFrame_Gray.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_GRAYSCALE);
 		img_AbsDiff_BinGray.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_GRAYSCALE);
@@ -92,6 +100,23 @@ void ofApp::setup(){
 		for(int i = 0; i < NUM_CALIB_IMGS; i++){
 			CalibImage[i].img.allocate(IMG_S_WIDTH, IMG_S_HEIGHT, OF_IMAGE_COLOR);
 		}
+	}
+}
+
+/******************************
+******************************/
+bool ofApp::isFile_Exist(char* FileName)
+{
+	FILE* fp = fopen(FileName, "r");
+	if(fp == nullptr){
+		return false;
+	}else{
+		fclose(fp);
+		
+		printf(">>> gui : load from file <<<\n");
+		fflush(stdout);
+		
+		return true;
 	}
 }
 
@@ -105,7 +130,7 @@ void ofApp::setup_Gui()
 	/********************
 	********************/
 	Gui_Global = new GUI_GLOBAL;
-	Gui_Global->setup("XBC", "gui.xml", 1000, 10);
+	Gui_Global->setup("XBC", "gui.xml", 1250, 10);
 }
 
 /******************************
@@ -177,6 +202,8 @@ void ofApp::update(){
 	********************/
 	now = ofGetElapsedTimeMillis();
 	
+	// if(State_Overlook == STATEOVERLOOK__RUN) fprintf(fp_Log, "%d,", now);
+	
 	/********************
 	********************/
 	if(b_CamSearchFailed){
@@ -196,6 +223,8 @@ void ofApp::update(){
 	/********************
 	********************/
 	KeyInputCommand.Reset(); // 持ち越し なし.
+	
+	// if(State_Overlook == STATEOVERLOOK__RUN) fprintf(fp_Log, "%d,", ofGetElapsedTimeMillis());
 }
 
 /******************************
@@ -204,18 +233,16 @@ void ofApp::update_img_OnCam(){
 	if(!b_HaltRGBVal_inCalib){
 		ofxCv::copy(cam, img_Frame);
 		if(b_flipCamera) img_Frame.mirror(false, true);
-		
 		// ofxCv::blur(img_Frame, ForceOdd((int)Gui_Global->BlurRadius_Frame));
-		
 		img_Frame.update();
+		
+		img_LastFrame_Gray = img_Frame_Gray;
+		// img_LastFrame_Gray.update(); // drawしないので不要.
+		
+		convertColor(img_Frame, img_Frame_Gray, CV_RGB2GRAY);
+		ofxCv::blur(img_Frame_Gray, ForceOdd((int)Gui_Global->BlurRadius_Frame));
+		img_Frame_Gray.update();
 	}
-	
-	img_LastFrame_Gray = img_Frame_Gray;
-	// img_LastFrame_Gray.update(); // drawしないので不要.
-	
-	convertColor(img_Frame, img_Frame_Gray, CV_RGB2GRAY);
-	ofxCv::blur(img_Frame_Gray, ForceOdd((int)Gui_Global->BlurRadius_Frame));
-	img_Frame_Gray.update();
 }
 
 /******************************
@@ -241,7 +268,9 @@ void ofApp::StateChart_overlook()
 				State_Calib = STATECALIB__WAITSHOOT_IMG_0;
 				
 				State_Led_Evil.Reset(now);
+				State_Led_Evil_Raw.Reset(now);
 				State_Led_Calm.Reset(now);
+				State_Led_Calm_Raw.Reset(now);
 				State_Motion.Reset(now);
 			}else{
 				ImageProcessing();
@@ -271,17 +300,6 @@ void ofApp::StateChart_Calib()
 				CalibImage[1].img = img_Frame;
 				CalAndMark_MinDistance(CalibImage[1]);
 				
-				State_Calib = STATECALIB__WAITSHOOT_IMG_2;
-			}
-			break;
-			
-		case STATECALIB__WAITSHOOT_IMG_2:
-			if(KeyInputCommand.Is_RetryCalib()){
-				State_Calib = STATECALIB__WAITSHOOT_IMG_0;
-			}else if(KeyInputCommand.Is_ShootImg()){
-				CalibImage[2].img = img_Frame;
-				CalAndMark_MinDistance(CalibImage[2]);
-				
 				/********************
 				********************/
 				save_NearestColor();
@@ -298,7 +316,9 @@ void ofApp::StateChart_Calib()
 				State_Calib = STATECALIB__WAITSHOOT_IMG_0; // 一応.
 				
 				State_Led_Evil.Reset(now);
+				State_Led_Evil_Raw.Reset(now);
 				State_Led_Calm.Reset(now);
+				State_Led_Calm_Raw.Reset(now);
 				State_Motion.Reset(now);
 			}
 			break;
@@ -376,44 +396,106 @@ int ofApp::int_sort( const void * a , const void * b )
 ******************************/
 void ofApp::ImageProcessing()
 {
+	if(!b_HaltRGBVal_inCalib) img_LedDetectedArea_Last = img_LedDetectedArea_Current;
+	img_LedDetectedArea_Current.setColor(ofColor(0, 0, 0)); // all clear.
 	img_LedDetectedArea.setColor(ofColor(0, 0, 0)); // all clear.
-	Judge_if_LedExist(CalibResult_Evil, State_Led_Evil, col_Evil);
-	Judge_if_LedExist(CalibResult_Calm, State_Led_Calm, col_Calm);
 	
+	update__img_LedDetected_Current(img_LedDetectedArea_Current_Evil, CalibResult_Evil, col_Evil);
+	update__img_LedDetected_Current(img_LedDetectedArea_Current_Calm, CalibResult_Calm, col_Calm);
+	
+	Judge_if_LedExist();
+	
+	/********************
+	********************/
 	Judge_if_MotionExist();
 }
 
 /******************************
 ******************************/
-void ofApp::Judge_if_LedExist(const CALIB_RESULT& CalibResult, STATE_ONOFF& State_Led, const ofColor& col_Target)
+void ofApp::update__img_LedDetected_Current(ofImage& _img_LedDetectedArea_Current, const CALIB_RESULT& CalibResult, const ofColor& col_Target)
 {
 	/********************
-	meas result : max = 5ms : 320 x 180
 	********************/
-	// fprintf(fp_Log, "%d,", ofGetElapsedTimeMillis());
-	
 	ofPixels& pix_Frame = img_Frame.getPixels();
-	ofPixels& pix_LedDetectedArea = img_LedDetectedArea.getPixels();
+	ofPixels& pix_LedDetectedArea_Current = _img_LedDetectedArea_Current.getPixels();
 	
-	int counter = 0;
 	for(int _x = 0; _x < img_Frame.getWidth(); _x++){
 		for(int _y = 0; _y < img_Frame.getHeight(); _y++){
 			ofColor col_Frame = pix_Frame.getColor(_x, _y);
 			
 			if(isThisColor_Judged_as_Led(CalibResult, col_Frame)){
-				counter++;
-				pix_LedDetectedArea.setColor(_x, _y, col_Target);
+				pix_LedDetectedArea_Current.setColor(_x, _y, ofColor(255, 255, 255));
 			}else{
-				// pix_LedDetectedArea.setColor(_x, _y, ofColor(0, 0, 0));
+				pix_LedDetectedArea_Current.setColor(_x, _y, ofColor(0, 0, 0));
 			}
 		}
 	}
 	
-	State_Led.update(counter, now);
+	/********************
+	OpenCVの膨張縮小って4近傍？8近傍?
+		http://micchysdiary.blogspot.com/2012/10/opencv48.html
+		
+	画像の平滑化 : median blur
+		http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_filtering/py_filtering.html
+	********************/
+	cv::Mat Mat_temp = toCv(_img_LedDetectedArea_Current);
+	ofxCv::medianBlur(Mat_temp, ForceOdd((int)Gui_Global->MedianRadius_Color));
+	_img_LedDetectedArea_Current.update(); // 一応.
+}
+
+/******************************
+******************************/
+void ofApp::Judge_if_LedExist()
+{
+	/********************
+	********************/
+	ofPixels& pix_Evil = img_LedDetectedArea_Current_Evil.getPixels();
+	ofPixels& pix_Calm = img_LedDetectedArea_Current_Calm.getPixels();
+	ofPixels& pix_Current = img_LedDetectedArea_Current.getPixels();
+	ofPixels& pix_Last = img_LedDetectedArea_Last.getPixels();
+	ofPixels& pix_Detected = img_LedDetectedArea.getPixels();
 	
-	img_LedDetectedArea.update();
-	
-	// fprintf(fp_Log, "%d\n", ofGetElapsedTimeMillis());
+	int counter_Evil_Raw = 0;
+	int counter_Calm_Raw = 0;
+	int counter_Evil = 0;
+	int counter_Calm = 0;
+	for(int _x = 0; _x < IMG_S_WIDTH; _x++){
+		for(int _y = 0; _y < IMG_S_HEIGHT; _y++){
+			/* Evil */
+			if( (pix_Evil.getColor(_x, _y).r == 255) ){ // white
+				pix_Current.setColor(_x, _y, col_Evil);
+				counter_Evil_Raw++;
+				
+				if(pix_Last.getColor(_x, _y) == col_Evil){ // both Current and Last are color of Evil.
+					pix_Detected.setColor(_x, _y, col_Evil);
+					counter_Evil++;
+				}
+			}
+			
+			/* Calm */
+			if( (pix_Calm.getColor(_x, _y).r == 255) ){
+				pix_Current.setColor(_x, _y, col_Calm);
+				counter_Calm_Raw++;
+				
+				if(pix_Last.getColor(_x, _y) == col_Calm){ // both Current and Last are color of Evil.
+					pix_Detected.setColor(_x, _y, col_Calm);
+					counter_Calm++;
+				}
+			}
+		}
+	}
+	State_Led_Evil_Raw.update(counter_Evil_Raw, now);
+	State_Led_Calm_Raw.update(counter_Calm_Raw, now);
+	State_Led_Evil.update(counter_Evil, now);
+	State_Led_Calm.update(counter_Calm, now);
+
+	/********************
+	********************/
+	img_LedDetectedArea_Current_Evil.update();
+	img_LedDetectedArea_Current_Calm.update();
+	img_LedDetectedArea_Current.update();
+	img_LedDetectedArea_Last.update();
+	img_LedDetectedArea.update();	
 }
 
 /******************************
@@ -451,7 +533,7 @@ void ofApp::Judge_if_MotionExist()
 	cv::Mat MatSrc		= toCv(img_AbsDiff_BinGray);
 	cv::Mat MatCleaned	= toCv(img_BinGray_Cleaned);
 	
-	cv::erode(MatSrc, MatCleaned, Mat(), cv::Point(-1, -1), (int)Gui_Global->ErodeSize); // 白に黒が侵食 : Clean
+	cv::erode(MatSrc, MatCleaned, Mat(), cv::Point(-1, -1), (int)Gui_Global->ErodeSize_Motion); // 白に黒が侵食 : Clean
 	img_BinGray_Cleaned.update();
 	
 	/********************
@@ -568,7 +650,7 @@ void ofApp::draw_RGB_ofThePoint_Run()
 		/********************
 		img_Frame
 		********************/
-		ofColor col = img_Frame.getPixels().getColor(imgCoord_x, imgCoord_y);;
+		ofColor col = img_Frame.getPixels().getColor(imgCoord_x, imgCoord_y);
 		
 		const int _x = 10;
 		// const int _x = pos_Draw[0].x + img_Frame.getWidth() + 10;
@@ -627,20 +709,36 @@ void ofApp::draw_RGB_ofThePoint_Run()
 		ofDrawLine(imgCoord_x + pos_Draw[0].x,  pos_Draw[0].y, imgCoord_x + pos_Draw[0].x, pos_Draw[0].y + img_Frame.getHeight());
 		
 		/********************
-		img_LedDetectedArea
+		img_LedDetectedArea_Current
+		********************/
+		col = img_LedDetectedArea_Current.getPixels().getColor(imgCoord_x, imgCoord_y);;
+		
+		/* */
+		ofSetColor(col_NotDetected);
+		sprintf(buf, "(%3d, %3d, %3d)", col.r, col.g, col.b);
+		font[FONT_S].drawString(buf, pos_Draw[1].x + img_LedDetectedArea_Current.getWidth() + 10,  pos_Draw[1].y + TextHeight * 1);
+		
+		/* Line */
+		ofSetColor(255, 255, 0, 255);
+		ofSetLineWidth(1);
+		ofDrawLine(pos_Draw[1].x, imgCoord_y + pos_Draw[1].y, pos_Draw[1].x + img_LedDetectedArea_Current.getWidth(), imgCoord_y + pos_Draw[1].y); // draw時のoffsetに注意.
+		ofDrawLine(imgCoord_x + pos_Draw[1].x,  pos_Draw[1].y, imgCoord_x + pos_Draw[1].x, pos_Draw[1].y + img_LedDetectedArea_Current.getHeight());
+		
+		/********************
+		img_LedDetectedArea = Last * Current
 		********************/
 		col = img_LedDetectedArea.getPixels().getColor(imgCoord_x, imgCoord_y);;
 		
 		/* */
 		ofSetColor(col_NotDetected);
 		sprintf(buf, "(%3d, %3d, %3d)", col.r, col.g, col.b);
-		font[FONT_S].drawString(buf, pos_Draw[1].x + img_LedDetectedArea.getWidth() + 10,  pos_Draw[1].y + TextHeight * 1);
+		font[FONT_S].drawString(buf, pos_Draw[2].x + img_LedDetectedArea.getWidth() + 10,  pos_Draw[2].y + TextHeight * 1);
 		
 		/* Line */
 		ofSetColor(255, 255, 0, 255);
 		ofSetLineWidth(1);
-		ofDrawLine(pos_Draw[1].x, imgCoord_y + pos_Draw[1].y, pos_Draw[1].x + img_LedDetectedArea.getWidth(), imgCoord_y + pos_Draw[1].y); // draw時のoffsetに注意.
-		ofDrawLine(imgCoord_x + pos_Draw[1].x,  pos_Draw[1].y, imgCoord_x + pos_Draw[1].x, pos_Draw[1].y + img_LedDetectedArea.getHeight());
+		ofDrawLine(pos_Draw[2].x, imgCoord_y + pos_Draw[2].y, pos_Draw[2].x + img_LedDetectedArea.getWidth(), imgCoord_y + pos_Draw[2].y); // draw時のoffsetに注意.
+		ofDrawLine(imgCoord_x + pos_Draw[2].x,  pos_Draw[2].y, imgCoord_x + pos_Draw[2].x, pos_Draw[2].y + img_LedDetectedArea.getHeight());
 	}
 }
 
@@ -688,13 +786,9 @@ void ofApp::draw_Calib()
 			NumImagesToDraw = 1;
 			break;
 			
-		case STATECALIB__WAITSHOOT_IMG_2:
-			NumImagesToDraw = 2;
-			break;
-			
 		case STATECALIB__FIN:
 		{
-			NumImagesToDraw = 3;
+			NumImagesToDraw = 2;
 			
 			/* */
 			int TextHeight = font[FONT_M].stringHeight("(A,yq]") * 1.2;
@@ -745,8 +839,8 @@ void ofApp::draw_Run()
 	********************/
 	ofSetColor(255);
 	img_Frame.draw(pos_Draw[0]);
-	
-	img_LedDetectedArea.draw(pos_Draw[1]);
+	img_LedDetectedArea_Current.draw(pos_Draw[1]);
+	img_LedDetectedArea.draw(pos_Draw[2]);
 	draw_RGB_ofThePoint_Run();
 	
 	ofSetColor(255);
@@ -756,32 +850,47 @@ void ofApp::draw_Run()
 	
 	/********************
 	********************/
-	int TextHeight = font[FONT_M].stringHeight("(A,yq]") * 1.5;
+	int TextHeight = font[FONT_S].stringHeight("(A,yq]") * 1.5;
 	
 	const ofColor col_NotDetected(120);
 	const ofColor col_Detected(255);
 	
 	char buf[BUF_SIZE_S];
 	
-	sprintf(buf, "R: %5d (%5d - %5d)", State_Led_Evil.get__NumPix_Detected(), State_Led_Evil.get__pixRange_from(), State_Led_Evil.get__pixRange_to());
+	/* */
+	sprintf(buf, "Evil: %5d", State_Led_Evil_Raw.get__NumPix_Detected());
+	if(State_Led_Evil_Raw.get_State() == STATE_ONOFF::STATE__DETECTED)	ofSetColor(col_Detected);
+	else																ofSetColor(col_NotDetected);
+	font[FONT_S].drawString(buf, pos_Draw[1].x + IMG_S_WIDTH + 10,  pos_Draw[1].y + IMG_S_HEIGHT - TextHeight);
+	
+	sprintf(buf, "Calm: %5d", State_Led_Calm_Raw.get__NumPix_Detected());
+	if(State_Led_Calm_Raw.get_State() == STATE_ONOFF::STATE__DETECTED)	ofSetColor(col_Detected);
+	else															ofSetColor(col_NotDetected);
+	font[FONT_S].drawString(buf, pos_Draw[1].x + IMG_S_WIDTH + 10,  pos_Draw[1].y + IMG_S_HEIGHT);
+	
+	/* */
+	sprintf(buf, "Evil: %5d (%5d - %5d)", State_Led_Evil.get__NumPix_Detected(), State_Led_Evil.get__pixRange_from(), State_Led_Evil.get__pixRange_to());
 	if(State_Led_Evil.get_State() == STATE_ONOFF::STATE__DETECTED)	ofSetColor(col_Detected);
 	else															ofSetColor(col_NotDetected);
-	font[FONT_M].drawString(buf, pos_Draw[1].x + IMG_S_WIDTH + 10,  pos_Draw[1].y + IMG_S_HEIGHT - TextHeight);
+	font[FONT_S].drawString(buf, pos_Draw[2].x + IMG_S_WIDTH + 10,  pos_Draw[2].y + IMG_S_HEIGHT - TextHeight);
 	
-	sprintf(buf, "B: %5d (%5d - %5d)", State_Led_Calm.get__NumPix_Detected(), State_Led_Calm.get__pixRange_from(), State_Led_Calm.get__pixRange_to());
+	sprintf(buf, "Calm: %5d (%5d - %5d)", State_Led_Calm.get__NumPix_Detected(), State_Led_Calm.get__pixRange_from(), State_Led_Calm.get__pixRange_to());
 	if(State_Led_Calm.get_State() == STATE_ONOFF::STATE__DETECTED)	ofSetColor(col_Detected);
 	else															ofSetColor(col_NotDetected);
-	font[FONT_M].drawString(buf, pos_Draw[1].x + IMG_S_WIDTH + 10,  pos_Draw[1].y + IMG_S_HEIGHT);
+	font[FONT_S].drawString(buf, pos_Draw[2].x + IMG_S_WIDTH + 10,  pos_Draw[2].y + IMG_S_HEIGHT);
 	
+	/* */
 	sprintf(buf, "%5d", State_Motion.get__NumPix_Detected());
 	if(State_Motion.get_State() == STATE_ONOFF::STATE__DETECTED)	ofSetColor(col_Detected);
 	else															ofSetColor(col_NotDetected);
-	font[FONT_M].drawString(buf, pos_Draw[5].x + IMG_S_WIDTH + 10,  pos_Draw[5].y + IMG_S_HEIGHT);
+	font[FONT_S].drawString(buf, pos_Draw[5].x + IMG_S_WIDTH + 10,  pos_Draw[5].y + IMG_S_HEIGHT);
 }
 
 /******************************
 ******************************/
 void ofApp::draw(){
+	// if(State_Overlook == STATEOVERLOOK__RUN) fprintf(fp_Log, "%d,", ofGetElapsedTimeMillis());
+	
 	/********************
 	********************/
 	if(b_CamSearchFailed){ drawMessage_CamSearchFailed(); return; }
@@ -823,6 +932,8 @@ void ofApp::draw(){
 	
 	printf("%5.0f\r", ofGetFrameRate());
 	fflush(stdout);
+	
+	// if(State_Overlook == STATEOVERLOOK__RUN) fprintf(fp_Log, "%d\n", ofGetElapsedTimeMillis());
 }
 
 /******************************

@@ -16,7 +16,7 @@
 /************************************************************
 ************************************************************/
 enum{
-	WINDOW_WIDTH	= 1280,	// 切れの良い解像度でないと、ofSaveScreen()での画面保存が上手く行かなかった(真っ暗な画面が保存されるだけ).
+	WINDOW_WIDTH	= 1500,	// 切れの良い解像度でないと、ofSaveScreen()での画面保存が上手く行かなかった(真っ暗な画面が保存されるだけ).
 	WINDOW_HEIGHT	= 480,
 };
 
@@ -73,12 +73,13 @@ public:
 	ofxGuiGroup Group_ImageProcess;
 		ofxFloatSlider BlurRadius_Frame;
 		ofxFloatSlider thresh_Diff_to_Bin;
-		ofxFloatSlider ErodeSize;
+		ofxFloatSlider ErodeSize_Motion;
 		
 	ofxGuiGroup Group_DetectColor;
 		ofxFloatSlider thresh_Diff_Hue;
 		ofxFloatSlider k_Saturation;
 		ofxFloatSlider k_Brightness;
+		ofxFloatSlider MedianRadius_Color;
 		
 	/****************************************
 	****************************************/
