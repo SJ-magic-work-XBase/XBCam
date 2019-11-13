@@ -473,11 +473,11 @@ void ofApp::Judge_if_LedExist()
 			}
 			
 			/* Calm */
-			if( (pix_Calm.getColor(_x, _y).r == 255) ){
+			if( (pix_Calm.getColor(_x, _y).r == 255) ){ // white
 				pix_Current.setColor(_x, _y, col_Calm);
 				counter_Calm_Raw++;
 				
-				if(pix_Last.getColor(_x, _y) == col_Calm){ // both Current and Last are color of Evil.
+				if(pix_Last.getColor(_x, _y) == col_Calm){ // both Current and Last are color of Calm.
 					pix_Detected.setColor(_x, _y, col_Calm);
 					counter_Calm++;
 				}
@@ -888,6 +888,50 @@ void ofApp::draw_Run()
 
 /******************************
 ******************************/
+void ofApp::draw_OperationInfo()
+{
+	/********************
+	********************/
+	const int _x = 1300;
+	const int _y = 260;
+	int id = 1;
+	int TextHeight = font[FONT_S].stringHeight("(A,yq]") * 1.5;
+	
+	ofSetColor(0, 150, 255, 255);
+	
+	char buf[BUF_SIZE_S];
+	
+	sprintf(buf, "[operation]");
+	font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+	id++;
+	
+	switch(State_Overlook){
+		case STATEOVERLOOK__CALIB:
+			sprintf(buf, "space\t:shoot image");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
+			sprintf(buf, "r\t\t:Retry Calib");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
+			sprintf(buf, "Enter\t:Finish Calib");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
+			break;
+			
+		case STATEOVERLOOK__RUN:
+			sprintf(buf, "r\t:Retry Calib");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
+			break;
+	}
+}
+
+/******************************
+******************************/
 void ofApp::draw(){
 	// if(State_Overlook == STATEOVERLOOK__RUN) fprintf(fp_Log, "%d,", ofGetElapsedTimeMillis());
 	
@@ -921,6 +965,8 @@ void ofApp::draw(){
 			draw_Run();
 			break;
 	}
+	
+	draw_OperationInfo();
 	
 	/********************
 	********************/

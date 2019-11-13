@@ -354,6 +354,7 @@ private:
 	void save_NearestColor();
 	bool isThisColor_Judged_as_Led(const CALIB_RESULT& CalibResult, const ofColor& col);
 	bool isFile_Exist(char* FileName);
+	void draw_OperationInfo();
 
 public:
 	/****************************************
