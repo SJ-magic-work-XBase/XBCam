@@ -901,6 +901,10 @@ void ofApp::draw_OperationInfo()
 	
 	char buf[BUF_SIZE_S];
 	
+	sprintf(buf, "%-7.1f fps", ofGetFrameRate());
+	font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+	id++;
+	
 	sprintf(buf, "[operation]");
 	font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
 	id++;
@@ -915,6 +919,10 @@ void ofApp::draw_OperationInfo()
 			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
 			id++;
 			
+			sprintf(buf, "h\t\t:Halt(stop) image");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
 			sprintf(buf, "Enter\t:Finish Calib");
 			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
 			id++;
@@ -923,6 +931,10 @@ void ofApp::draw_OperationInfo()
 			
 		case STATEOVERLOOK__RUN:
 			sprintf(buf, "r\t:Retry Calib");
+			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
+			id++;
+			
+			sprintf(buf, "h\t:Halt(stop) image");
 			font[FONT_S].drawString(buf, _x, _y + TextHeight * id);
 			id++;
 			
