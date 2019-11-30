@@ -64,7 +64,7 @@ void ofApp::exit()
 void ofApp::setup(){
 	/********************
 	********************/
-	ofSetWindowTitle("XBC");
+	ofSetWindowTitle("XBCam");
 	
 	ofSetWindowShape( WINDOW_WIDTH, WINDOW_HEIGHT );
 	/*
@@ -155,7 +155,13 @@ void ofApp::setup_Camera()
 		
 		int i;
 		for(i = 0; i < Devices.size(); i++){
-			if(Devices[i].deviceName == "HD Pro Webcam C920" ){
+			/********************
+			Device Nameが、変わってしまう可能性があるため、
+			「内蔵Camでないもので、最初に見つかったカメラ」と言う条件に変更した。
+			********************/
+			// if(Devices[i].deviceName == "HD Pro Webcam C920" ){
+			// if(Devices[i].deviceName != "FaceTime HD Camera" ){ // for my mac.
+			if(Devices[i].deviceName != "FaceTime HDカメラ（内蔵）" ){ // for New mac : 日本語表記になってた。。。
 				Cam_id = i;
 				break;
 			}
@@ -179,6 +185,7 @@ void ofApp::setup_Camera()
 		cam.setDeviceID(Cam_id);
 		cam.initGrabber(VIDEO_WIDTH, VIDEO_HEIGHT);
 		
+		printf("> CamName = %s\n", Devices[Cam_id].deviceName.c_str());
 		printf("> Cam size asked = (%d, %d), actual = (%d, %d)\n", int(VIDEO_WIDTH), int(VIDEO_HEIGHT), int(cam.getWidth()), int(cam.getHeight()));
 		fflush(stdout);
 	}
@@ -369,10 +376,10 @@ void ofApp::CalAndMark_MinDistance(CALIB_IMG& _CalibImage){
 	ofPoint ret_pos;
 	
 	Search_MinSquareDistance_to_TargetCol(_CalibImage.img, col_Evil, _CalibImage.ret_MinSquareDistance__to_Evil, ret_pos, _CalibImage.col_NearestTo_Evil);
-	cv::circle(Mat_temp, cv::Point(ret_pos.x, ret_pos.y), 4/* radius */, toCv(col_Evil)/*cv::Scalar(255, 0, 0)*/, 1/* thickness : -1で塗りつぶし */, CV_AA);
+	cv::circle(Mat_temp, cv::Point(ret_pos.x, ret_pos.y), 14/* radius */, toCv(col_Evil)/*cv::Scalar(255, 0, 0)*/, 1/* thickness : -1で塗りつぶし */, CV_AA);
 	
 	Search_MinSquareDistance_to_TargetCol(_CalibImage.img, col_Calm, _CalibImage.ret_MinSquareDistance__to_Calm, ret_pos, _CalibImage.col_NearestTo_Calm);
-	cv::circle(Mat_temp, cv::Point(ret_pos.x, ret_pos.y), 4/* radius */, cv::Scalar(0, 255, 255), 1/* thickness : -1で塗りつぶし */, CV_AA);
+	cv::circle(Mat_temp, cv::Point(ret_pos.x, ret_pos.y), 14/* radius */, cv::Scalar(0, 255, 255), 1/* thickness : -1で塗りつぶし */, CV_AA);
 	
 	_CalibImage.img.update(); // apply to texture.
 }
